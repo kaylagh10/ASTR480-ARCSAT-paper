@@ -1,3 +1,15 @@
+# Global imports
+import numpy as np
+from astropy.io import fits
+from astropy.stats import sigma_clip
+import os
+from photutils.aperture import CircularAperture, CircularAnnulus, aperture_photometry
+from astropy.table import vstack
+import matplotlib.pyplot as plt
+from astropy.table import Table
+import matplotlib.dates as mdates
+from datetime import datetime
+
 def do_aperture_photometry(
     image,
     positions,
@@ -5,33 +17,6 @@ def do_aperture_photometry(
     sky_radius_in,
     sky_annulus_width,
 ):
-    """
-    Perform circular aperture photometry on one or more target positions in an image,
-    including sky background subtraction using an annulus.
-
-    Parameters
-    ----------
-    image : str
-        Path to the FITS file containing the science data.
-    positions : list of tuples
-        List of (x, y) coordinates of the target(s) to measure.
-    radii : list of float
-        Radii (in pixels) to use for the circular aperture(s).
-    sky_radius_in : float
-        Inner radius of the sky background annulus (in pixels).
-    sky_annulus_width : float
-        Width of the sky annulus (in pixels).
-
-    Returns
-    -------
-    final_table : astropy.table.QTable
-        Combined photometry table with aperture sums, background estimates,
-        net flux, and metadata for each aperture radius at each position.
-    """
-    import numpy as np
-    from astropy.io import fits
-    from photutils.aperture import CircularAperture, CircularAnnulus, aperture_photometry
-    from astropy.table import vstack
 
     # Step 1: Open the FITS file and extract image data
     # Data is converted to float32 for precision in flux calculations
@@ -75,23 +60,6 @@ def do_aperture_photometry(
 
 
 def plot_radial_profile(aperture_photometry_data, output_filename="radial_profile.png"):
-    """
-    Plot a radial flux profile from aperture photometry measurements.
-
-    Parameters
-    ----------
-    aperture_photometry_data : astropy.table.QTable
-        Table output from do_aperture_photometry(). Must contain 'radius', 'net_flux',
-        and 'position' columns.
-    output_filename : str
-        Path to save the radial profile plot as a PNG.
-
-    Returns
-    -------
-    None
-    """
-    import matplotlib.pyplot as plt
-
     # Step 1: Group the data by position — this supports multiple targets
     profile_data = {}
     for row in aperture_photometry_data:
@@ -135,32 +103,6 @@ def generate_light_curve(
     sky_annulus_width=4,
     output_basename="lightcurve"
 ):
-    """
-    Generate a light curve by performing aperture photometry on all FITS files in a directory.
-
-    Parameters
-    ----------
-    directory : str
-        Path to the directory containing reduced FITS images.
-    position : tuple
-        (x, y) pixel coordinates of the target star.
-    aperture_radius : float
-        Radius of the aperture used for photometry.
-    sky_radius_in : float
-        Inner radius of the sky annulus.
-    sky_annulus_width : float
-        Width of the sky annulus.
-    output_basename : str
-        Base filename for output CSV and PNG files.
-
-    Returns
-    -------
-    None
-    """
-    import os
-    import matplotlib.pyplot as plt
-    from astropy.table import Table
-
     fits_files = sorted([os.path.join(directory, f) for f in os.listdir(directory) if f.endswith(".fits")])
     times = []
     fluxes = []
@@ -188,11 +130,16 @@ def generate_light_curve(
     png_path = os.path.join(directory, f"{output_basename}.png")
     table.write(csv_path, format="ascii.csv", overwrite=True)
 
-    plt.figure()
-    plt.plot(times, fluxes, "ko-")
+    # Normalize time to start at zero
+    time_start = times[0]
+    relative_times = [t - time_start for t in times]
+
+    plt.figure(figsize=(10, 6))
+    plt.plot(times, fluxes, "ko-", markersize=5)
     plt.xlabel("Time")
     plt.ylabel("Net Flux")
-    plt.title(f"Light Curve: {output_basename}")
+    plt.ylim(-1.0e5, 1.4e6)
+    plt.title(f"{output_basename}", fontsize=14)
     plt.grid(True)
     plt.savefig(png_path)
     plt.close()
@@ -203,19 +150,19 @@ if __name__ == "__main__":
 
     # Generate light curve for GJ-486
     generate_light_curve(
-        directory="reductions/GJ-486",
+        directory="reduced GJ-486",
         position=GJ_486_pos,
-        output_basename="gj486_lightcurve"
+        output_basename="GJ 486 Lightcurve"
     )
 
     # Generate light curve for TOI-1199 with improved photometry parameters
     generate_light_curve(
-        directory="reductions/TOI-1199",
+        directory="reduced TOI-1199",
         position=TOI_1199_pos,
         aperture_radius=7,
         sky_radius_in=12,
         sky_annulus_width=6,
-        output_basename="toi1199_lightcurve"
+        output_basename="TOI 1199 Lightcurve"
     )
 
-    print("Photometry complete. Light curves saved to each reductions/ subfolder.")
+    print("Photometry complete. Light curves saved to each reduced subfolder.")
